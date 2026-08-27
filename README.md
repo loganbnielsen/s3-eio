@@ -10,10 +10,14 @@ Originally developed inside the [Sun](https://github.com/loganbnielsen/sun)
 platform as its first backend proving `aws-eio`'s transport layer end-to-end,
 and extracted here to be usable standalone.
 
-**Caution:** local tests cover host/path construction and response
-interpretation against synthetic responses (see "Test strategy" below); a
-live smoke test exists but has not yet been run against a real bucket. Treat
-0.1.0 accordingly until someone reports a real end-to-end call working.
+**Live-tested successfully** (`test/test_s3_live.ml`, put/head/get/delete
+round trip + the 404 path) against a real bucket — this required a fix in
+`aws-eio` itself ([`aws-eio#5`](https://github.com/loganbnielsen/aws-eio/pull/5)):
+`x-amz-content-sha256` was folded into the SigV4 signature but never actually
+sent as a header, which S3 (unlike some other services) rejects outright.
+Make sure your `aws-eio` is at least that fix's version. `scripts/setup.sh`/
+`teardown.sh` provision a real bucket for this in your own AWS account — see
+their headers for usage.
 
 ## Build
 
@@ -30,7 +34,9 @@ dune runtest
 
 No external infrastructure required for the default test run. A live test
 gated by `S3_EIO_LIVE=1` (real bucket + credentials required) is in
-`test/test_s3_live.ml` and is skipped otherwise.
+`test/test_s3_live.ml` and is skipped otherwise. `scripts/setup.sh` provisions
+a dedicated bucket for it in your own AWS account (`scripts/teardown.sh`
+removes it) — see their headers for usage.
 
 ## Test strategy
 
