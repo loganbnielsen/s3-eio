@@ -30,7 +30,9 @@ dune runtest
 
 No external infrastructure required for the default test run. A live test
 gated by `S3_EIO_LIVE=1` (real bucket + credentials required) is in
-`test/test_s3_live.ml` and is skipped otherwise.
+`test/test_s3_live.ml` and is skipped otherwise. `terraform/` provisions the
+dedicated bucket and a scoped, assume-role-only IAM role for it — see its
+header comment for usage.
 
 ## Test strategy
 
