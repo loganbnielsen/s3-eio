@@ -1,8 +1,5 @@
-(* Live S3 smoke test — the remaining half of AWS-001 (see
-   project/tickets/READY_FOR_ENGINEERING/AWS-001.md and
-   docs/planning/OPAM_FOUNDATION_TRACKER.md), the STS half already merged
-   into aws-eio. Skipped entirely unless S3_EIO_LIVE=1 is set: the default
-   `dune runtest` must never touch a real AWS account or bucket.
+(* Live S3 smoke test. Skipped entirely unless S3_EIO_LIVE=1 is set: the
+   default `dune runtest` must never touch a real AWS account or bucket.
 
    Required environment: S3_EIO_LIVE=1, S3_EIO_LIVE_BUCKET=<a bucket you
    control>, plus credentials Aws_credentials's Env_chain already knows how
@@ -11,10 +8,26 @@
 
    Writes exactly one tiny object under the sun-live-test/ prefix per test
    run and deletes it in Fun.protect, so a failed assertion still cleans up.
-   The IAM policy this needs is documented in
-   docs/planning/OPAM_FOUNDATION_TRACKER.md's Phase 5 section: PutObject/
-   GetObject/DeleteObject scoped to s3:::<bucket>/sun-live-test/*, plus
-   ListBucket scoped to that prefix. *)
+   Minimal IAM policy for the credentials used here:
+
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Sid": "S3LiveTestObjectsOnly",
+         "Effect": "Allow",
+         "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+         "Resource": "arn:aws:s3:::YOUR_BUCKET/sun-live-test/*"
+       },
+       {
+         "Sid": "S3LiveTestListOnlyPrefix",
+         "Effect": "Allow",
+         "Action": "s3:ListBucket",
+         "Resource": "arn:aws:s3:::YOUR_BUCKET",
+         "Condition": { "StringLike": { "s3:prefix": "sun-live-test/*" } }
+       }
+     ]
+   } *)
 
 let live_enabled () = Sys.getenv_opt "S3_EIO_LIVE" = Some "1"
 
