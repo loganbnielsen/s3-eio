@@ -120,7 +120,7 @@ let test_interpret_head_success () =
     Alcotest.(check (option string)) "last_modified" (Some "Wed, 26 Aug 2026 00:00:00 GMT") last_modified
 
 let test_interpret_head_case_insensitive_headers () =
-  (* Real servers vary header casing; header_ci must compare
+  (* Real servers vary header casing; find_header_case_insensitive must compare
      case-insensitively rather than expecting a canonical form. *)
   match S3_client.interpret_head (200, [ ("content-length", "7"); ("etag", "\"x\"") ], "") with
   | Error e -> Alcotest.fail (S3_error.to_string e)
