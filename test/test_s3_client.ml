@@ -9,10 +9,7 @@ let test_host_and_path_real_aws () =
     (S3_client.host_and_path config ~key:"path/to/object")
 
 let test_host_and_path_endpoint_override_ipv6 () =
-  (* Regression test: split_host_port used to split on the *last* colon
-     unconditionally, which cuts into an IPv6 literal's own colons instead
-     of finding the port separator. "[::1]:9000" must parse as host "::1",
-     not something mangled. *)
+  (* Regression: naive last-colon splitting would cut into the IPv6 literal itself. *)
   let config =
     { S3_client.bucket = "my-bucket"; region = "us-west-2";
       credentials = Aws_credentials.of_env ~region:"us-west-2" ();
@@ -32,9 +29,8 @@ let test_host_and_path_endpoint_override () =
     ("127.0.0.1", "/my-bucket/path/to/object")
     (S3_client.host_and_path config ~key:"path/to/object")
 
-(* config.bucket/region go straight into the Host header and connection
-   target, unencoded (unlike key) — validate_config must reject CRLF or a
-   less-trusted bucket/region value could inject extra header lines. *)
+(* bucket/region go unencoded into the Host header, unlike key —
+   validate_config must reject CRLF to block header injection. *)
 let test_validate_config_rejects_crlf_in_bucket () =
   let config =
     { S3_client.bucket = "evil\r\nX-Injected: 1"; region = "us-east-1";
@@ -63,11 +59,9 @@ let test_validate_config_accepts_normal_config () =
 
 let not_found_xml = {|<?xml version="1.0"?><Error><Code>NoSuchKey</Code><Message>x</Message></Error>|}
 
-(* aws-eio's signed_request turns every non-2xx status into
-   Error (Http_error (status, body)) before interpret_* ever sees it;
-   reclassify_transport_result restores the status/body so a 404 GetObject
-   still classifies as Not_found through the real call path, not just when
-   interpret_get is called directly with a synthetic status. *)
+(* Confirms reclassify_transport_result restores status/body so a 404
+   classifies as Not_found through the real call path, not just via a
+   synthetic status. *)
 let test_reclassify_then_interpret_get_not_found () =
   let transport_result : (int * (string * string) list * string, Aws_error.t) result =
     Error (Aws_error.Http_error (404, not_found_xml))
@@ -89,10 +83,8 @@ let test_reclassify_passes_through_success () =
   Alcotest.(check bool) "a 2xx Ok passes through unchanged" true
     (S3_client.reclassify_transport_result transport_result = Ok (200, [], "hi"))
 
-(* interpret_* mappers are pure — see s3_client.ml's top comment on why
-   operation tests exercise these directly instead of a mock server
-   (signed_request always negotiates real TLS, which a bare-IP loopback mock
-   can't satisfy). *)
+(* interpret_* are tested directly rather than via a mock server — see
+   s3_client.ml's top comment (signed_request always negotiates real TLS). *)
 
 let test_interpret_put_success () =
   Alcotest.(check bool) "200 -> Ok ()" true (Result.is_ok (S3_client.interpret_put (200, [], "")))

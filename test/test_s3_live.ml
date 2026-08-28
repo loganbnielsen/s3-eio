@@ -1,14 +1,12 @@
-(* Live S3 smoke test. Skipped entirely unless S3_EIO_LIVE=1 is set: the
-   default `dune runtest` must never touch a real AWS account or bucket.
+(* Live S3 smoke test — skipped unless S3_EIO_LIVE=1 (`dune runtest` must
+   never touch a real AWS account).
 
-   Required environment: S3_EIO_LIVE=1, S3_EIO_LIVE_BUCKET=<a bucket you
-   control>, plus credentials Aws_credentials's Env_chain already knows how
-   to read (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, optionally
-   AWS_SESSION_TOKEN). AWS_REGION is optional, defaulting to us-east-1.
+   Required: S3_EIO_LIVE=1, S3_EIO_LIVE_BUCKET=<bucket>,
+   AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY (optionally AWS_SESSION_TOKEN),
+   AWS_REGION (defaults to us-east-1).
 
-   Writes exactly one tiny object under the sun-live-test/ prefix per test
-   run and deletes it in Fun.protect, so a failed assertion still cleans up.
-   Minimal IAM policy for the credentials used here:
+   Writes one object under sun-live-test/ per run and deletes it via
+   Fun.protect, so a failed assertion still cleans up. Minimal IAM policy:
 
    {
      "Version": "2012-10-17",

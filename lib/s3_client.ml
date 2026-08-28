@@ -12,10 +12,8 @@ type head_info = {
   content_type : string option;
 }
 
-(* Bracket-aware: "[::1]:9000" (an IPv6-literal endpoint) is not just "split
-   on the last colon" — that would cut into the address itself, since IPv6
-   literals contain colons. RFC 3986's "[host]:port" bracket convention
-   disambiguates exactly this case. *)
+(* Bracket-aware: splitting "[::1]:9000" on the last colon would cut into the
+   IPv6 address itself; RFC 3986's "[host]:port" convention disambiguates. *)
 let split_host_port endpoint =
   if String.length endpoint > 0 && endpoint.[0] = '[' then
     match String.index_opt endpoint ']' with
@@ -35,13 +33,9 @@ let split_host_port endpoint =
 
 let has_crlf s = String.exists (fun c -> c = '\r' || c = '\n') s
 
-(* config.bucket/region become an unencoded Host header and TCP connection
-   target (Aws_http.write_request does not sanitize header values) —
-   unlike key, which always goes through Aws_sigv4.canonical_uri's
-   percent-encoding before it becomes wire bytes, nothing encodes these, so
-   a caller building config from less-trusted input (e.g. a per-tenant
-   bucket name) could otherwise inject extra header lines. Fail closed
-   rather than silently building a malformed/exploitable request. *)
+(* config.bucket/region become an unencoded Host header, unlike key (which
+   is percent-encoded) — reject CRLF to block header injection from
+   less-trusted input. *)
 let validate_config config =
   if has_crlf config.bucket then Error (S3_error.Invalid_config "bucket contains a CR or LF character")
   else if has_crlf config.region then Error (S3_error.Invalid_config "region contains a CR or LF character")
@@ -68,18 +62,13 @@ let resolve_credentials ~net ~clock config =
   | Error e -> Error (S3_error.Aws e)
   | Ok creds -> Ok creds
 
-(* Every operation resolves credentials fresh — Aws_credentials.resolve
-   documents that it does not cache or refresh on the caller's behalf.
-   Correct but not free for Web_identity/Container/Imdsv2 (an extra network
-   round trip per S3 call); caching until resolved.expiration approaches is
-   real, deferred work — see s3-eio.md's "Out of Scope". *)
-(* aws-eio's signed_request converts every non-2xx status into
-   Error (Http_error (status, body)) before returning, so it has to be
-   re-threaded back into the Ok shape interpret_put/get/delete/head expect,
-   or their non-2xx classification (Not_found etc.) is unreachable. Headers
-   are lost on this path ([]), matching signed_request's own choice to only
-   return headers on success. Factored out as a pure function so it's
-   testable without a real network call. *)
+(* Credentials are resolved fresh on every call, not cached — an extra
+   round trip per S3 call for Web_identity/Container/Imdsv2. Deferred; see
+   s3-eio.md's "Out of Scope". *)
+(* signed_request turns every non-2xx status into Error (Http_error _);
+   re-thread it back into the Ok shape interpret_* expects, or their
+   non-2xx branches are unreachable. Headers are lost here, matching
+   signed_request's own success-only header return. *)
 let reclassify_transport_result :
     (int * (string * string) list * string, Aws_error.t) result -> (int * (string * string) list * string, S3_error.t) result
     = function
@@ -102,15 +91,10 @@ let send_request ~net ~clock config ~meth ~key ?query ?body () =
 let find_header_case_insensitive name headers =
   List.find_map (fun (k, v) -> if String.lowercase_ascii k = name then Some v else None) headers
 
-(* Response interpretation is pure and deliberately separated from
-   send_request above: aws-eio's signed_request always negotiates real TLS (there is no
-   plain-HTTP mode to point at a lightweight local mock server, and
-   TLS/SNI construction rejects bare IP literals like 127.0.0.1 as
-   syntactically invalid hostnames) — see s3-eio.md's test strategy note.
-   Keeping "what result does this (status, headers, body) map to" as pure
-   functions means that mapping is fully unit-testable without a network
-   call at all; the wire/TLS path itself is exercised by aws-eio's own test
-   suite and by this package's live test (S3_EIO_LIVE=1). *)
+(* Kept pure and separate from send_request: signed_request always
+   negotiates real TLS (no plain-HTTP mode, and bare IP literals aren't
+   valid SNI hostnames), so these are unit-tested directly rather than via
+   a mock server — see s3-eio.md's test strategy note. *)
 let interpret_put (status, _headers, body) =
   if status >= 200 && status < 300 then Ok () else Error (S3_error.of_response ~status ~body)
 
@@ -122,12 +106,9 @@ let interpret_get (status, _headers, body) =
 let interpret_delete (status, _headers, body) =
   if status >= 200 && status < 300 then Ok () else Error (S3_error.of_response ~status ~body)
 
-(* HEAD responses never carry a body per HTTP semantics (aws_http.ml
-   enforces this at the transport layer), so there is nothing for
-   S3_error.of_response to parse into a Service_error on a HEAD error — a
-   HEAD 404 is always Not_found, anything else lands in
-   Unparseable_error_response with an empty body, which is expected and
-   correct, not a parsing bug. *)
+(* HEAD responses never carry a body, so a non-404 HEAD error always lands
+   in Unparseable_error_response with an empty body — expected, not a
+   parsing bug. *)
 let interpret_head (status, headers, body) =
   if status >= 200 && status < 300 then
     Ok
