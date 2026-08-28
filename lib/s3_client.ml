@@ -87,7 +87,7 @@ let reclassify_transport_result :
   | Error e -> Error (S3_error.Aws e)
   | Ok (status, headers, body) -> Ok (status, headers, body)
 
-let call ~net ~clock config ~meth ~key ?query ?body () =
+let send_request ~net ~clock config ~meth ~key ?query ?body () =
   let* () = validate_config config in
   let* creds = resolve_credentials ~net ~clock config in
   let host, port, path = host_port_and_path config ~key in
@@ -99,11 +99,11 @@ let call ~net ~clock config ~meth ~key ?query ?body () =
        ~region:config.region ~service:"s3" ~normalize_path:false
        ~meth ~host ?port ~path ?query ?body ())
 
-let header_ci name headers =
+let find_header_case_insensitive name headers =
   List.find_map (fun (k, v) -> if String.lowercase_ascii k = name then Some v else None) headers
 
-(* Response interpretation is pure and deliberately separated from call
-   above: aws-eio's signed_request always negotiates real TLS (there is no
+(* Response interpretation is pure and deliberately separated from
+   send_request above: aws-eio's signed_request always negotiates real TLS (there is no
    plain-HTTP mode to point at a lightweight local mock server, and
    TLS/SNI construction rejects bare IP literals like 127.0.0.1 as
    syntactically invalid hostnames) — see s3-eio.md's test strategy note.
@@ -111,8 +111,8 @@ let header_ci name headers =
    functions means that mapping is fully unit-testable without a network
    call at all; the wire/TLS path itself is exercised by aws-eio's own test
    suite and by this package's live test (S3_EIO_LIVE=1). *)
-let interpret_put (status, _headers, resp_body) =
-  if status >= 200 && status < 300 then Ok () else Error (S3_error.of_response ~status ~body:resp_body)
+let interpret_put (status, _headers, body) =
+  if status >= 200 && status < 300 then Ok () else Error (S3_error.of_response ~status ~body)
 
 let interpret_get (status, _headers, body) =
   if status >= 200 && status < 300 then Ok body else Error (S3_error.of_response ~status ~body)
@@ -131,29 +131,30 @@ let interpret_delete (status, _headers, body) =
 let interpret_head (status, headers, body) =
   if status >= 200 && status < 300 then
     Ok
-      { content_length = header_ci "content-length" headers |> Option.map int_of_string_opt |> Option.join;
-        etag = header_ci "etag" headers;
-        last_modified = header_ci "last-modified" headers;
-        content_type = header_ci "content-type" headers;
+      { content_length =
+          find_header_case_insensitive "content-length" headers |> Option.map int_of_string_opt |> Option.join;
+        etag = find_header_case_insensitive "etag" headers;
+        last_modified = find_header_case_insensitive "last-modified" headers;
+        content_type = find_header_case_insensitive "content-type" headers;
       }
   else Error (S3_error.of_response ~status ~body)
 
 let put_object ~net ~clock config ~key ~body =
-  match call ~net ~clock config ~meth:`PUT ~key ~body () with
+  match send_request ~net ~clock config ~meth:`PUT ~key ~body () with
   | Error _ as e -> e
   | Ok r -> interpret_put r
 
 let get_object ~net ~clock config ~key =
-  match call ~net ~clock config ~meth:`GET ~key () with
+  match send_request ~net ~clock config ~meth:`GET ~key () with
   | Error _ as e -> e
   | Ok r -> interpret_get r
 
 let delete_object ~net ~clock config ~key =
-  match call ~net ~clock config ~meth:`DELETE ~key () with
+  match send_request ~net ~clock config ~meth:`DELETE ~key () with
   | Error _ as e -> e
   | Ok r -> interpret_delete r
 
 let head_object ~net ~clock config ~key =
-  match call ~net ~clock config ~meth:`HEAD ~key () with
+  match send_request ~net ~clock config ~meth:`HEAD ~key () with
   | Error _ as e -> e
   | Ok r -> interpret_head r
