@@ -10,19 +10,14 @@ type t =
       (** Other non-2xx with a parseable [<Error><Code>/<Message>] body. *)
   | Unparseable_error_response of { status : int; body : string }
       (** Non-2xx whose body didn't parse as an S3 error document — includes
-          every HEAD 404, since HEAD responses never carry a body to parse
-          per HTTP semantics (a HEAD 404 is [Not_found], not this case; this
-          case is for other statuses on HEAD, or a genuinely malformed body
-          on GET/PUT/DELETE). *)
+          every non-404 HEAD error, since HEAD responses never carry a body
+          to parse. *)
   | Invalid_config of string
       (** [config.bucket]/[config.region]/[config.endpoint] failed a
-          fail-closed sanity check before being used to build a request —
-          see {!S3_client.host_port_and_path}. Currently just a CR/LF guard
-          (these values become an unencoded HTTP [Host] header and TCP
-          connection target — unlike [key], which is always percent-encoded
-          by {!Aws_sigv4.canonical_uri} before it becomes wire bytes, nothing
-          encodes bucket/region/endpoint, so a caller building [config] from
-          less-trusted input could otherwise inject extra header lines). *)
+          fail-closed CR/LF check before being used to build a request —
+          these become an unencoded HTTP [Host] header, so untrusted input
+          could otherwise inject header lines. See
+          {!S3_client.host_port_and_path}. *)
 
 val of_response : status:int -> body:string -> t
 (** Classify a non-2xx S3 response: 404 becomes [Not_found]; a body that

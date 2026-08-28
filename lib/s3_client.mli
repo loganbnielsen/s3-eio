@@ -37,18 +37,12 @@ val head_object :
 
 val host_and_path : config -> key:string -> string * string
 (** The [(host, path)] pair every operation signs and sends, port stripped
-    off (a [config.endpoint] of ["host:port"] passes [port] to
-    {!Aws_http.signed_request} separately — [signed_request] takes host and
-    port as distinct arguments, and a combined "host:port" string as [host]
-    would fail to resolve as a literal hostname). See the host-addressing
-    rules in [s3-eio.md]. *)
+    off ([signed_request] takes host and port as separate arguments). See
+    the host-addressing rules in [s3-eio.md]. *)
 
-(** Pure (status, headers, body) -> result mappers, one per operation —
-    unit-testable without a network call. See [s3_client.ml]'s top comment
-    on why this package's operation tests exercise these directly instead of
-    a local mock server: [signed_request] always negotiates real TLS, which
-    a lightweight loopback mock can't satisfy (bare IP literals aren't valid
-    TLS/SNI hostnames). *)
+(** Pure (status, headers, body) -> result mappers, unit-testable without a
+    network call — see [s3_client.ml]'s top comment on why these are tested
+    directly instead of via a mock server. *)
 
 val validate_config : config -> (unit, S3_error.t) result
 (** The CR/LF fail-closed check every operation runs before building a
@@ -56,11 +50,9 @@ val validate_config : config -> (unit, S3_error.t) result
 
 val reclassify_transport_result :
   (int * (string * string) list * string, Aws_error.t) result -> (int * (string * string) list * string, S3_error.t) result
-(** [Aws_http.signed_request] already converts every non-2xx status into
-    [Error (Http_error (status, body))] — this re-threads that back into the
-    [Ok] shape [interpret_*] expects, so their non-2xx classification
-    branches are actually reachable. See [s3_client.ml]'s comment on why
-    this had to be pulled out as its own testable function. *)
+(** Re-threads [signed_request]'s [Error (Http_error (status, body))] back
+    into the [Ok] shape [interpret_*] expects, so their non-2xx branches are
+    reachable. *)
 
 val interpret_put : int * (string * string) list * string -> (unit, S3_error.t) result
 val interpret_get : int * (string * string) list * string -> (string, S3_error.t) result
