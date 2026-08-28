@@ -6,7 +6,7 @@ let test_host_and_path_real_aws () =
   in
   Alcotest.(check (pair string string)) "virtual-hosted-style"
     ("my-bucket.s3.us-west-2.amazonaws.com", "/path/to/object")
-    (S3_client.host_and_path config ~key:"path/to/object")
+    (S3_client.For_testing.host_and_path config ~key:"path/to/object")
 
 let test_host_and_path_endpoint_override_ipv6 () =
   (* Regression: naive last-colon splitting would cut into the IPv6 literal itself. *)
@@ -17,7 +17,7 @@ let test_host_and_path_endpoint_override_ipv6 () =
   in
   Alcotest.(check (pair string string)) "IPv6-bracketed endpoint, port split off correctly"
     ("::1", "/my-bucket/path/to/object")
-    (S3_client.host_and_path config ~key:"path/to/object")
+    (S3_client.For_testing.host_and_path config ~key:"path/to/object")
 
 let test_host_and_path_endpoint_override () =
   let config =
@@ -27,7 +27,7 @@ let test_host_and_path_endpoint_override () =
   in
   Alcotest.(check (pair string string)) "path-style against the override host, port split off"
     ("127.0.0.1", "/my-bucket/path/to/object")
-    (S3_client.host_and_path config ~key:"path/to/object")
+    (S3_client.For_testing.host_and_path config ~key:"path/to/object")
 
 (* bucket/region go unencoded into the Host header, unlike key —
    validate_config must reject CRLF to block header injection. *)
@@ -38,7 +38,7 @@ let test_validate_config_rejects_crlf_in_bucket () =
       endpoint = None }
   in
   Alcotest.(check bool) "CRLF in bucket is rejected" true
-    (match S3_client.validate_config config with Error (Invalid_config _) -> true | _ -> false)
+    (match S3_client.For_testing.validate_config config with Error (Invalid_config _) -> true | _ -> false)
 
 let test_validate_config_rejects_crlf_in_region () =
   let config =
@@ -47,7 +47,7 @@ let test_validate_config_rejects_crlf_in_region () =
       endpoint = None }
   in
   Alcotest.(check bool) "CRLF in region is rejected" true
-    (match S3_client.validate_config config with Error (Invalid_config _) -> true | _ -> false)
+    (match S3_client.For_testing.validate_config config with Error (Invalid_config _) -> true | _ -> false)
 
 let test_validate_config_accepts_normal_config () =
   let config =
@@ -55,7 +55,7 @@ let test_validate_config_accepts_normal_config () =
       credentials = Aws_credentials.of_env ~region:"us-east-1" ();
       endpoint = None }
   in
-  Alcotest.(check bool) "ordinary config passes" true (Result.is_ok (S3_client.validate_config config))
+  Alcotest.(check bool) "ordinary config passes" true (Result.is_ok (S3_client.For_testing.validate_config config))
 
 let not_found_xml = {|<?xml version="1.0"?><Error><Code>NoSuchKey</Code><Message>x</Message></Error>|}
 
@@ -66,7 +66,7 @@ let test_reclassify_then_interpret_get_not_found () =
   let transport_result : (int * (string * string) list * string, Aws_error.t) result =
     Error (Aws_error.Http_error (404, not_found_xml))
   in
-  match Result.bind (S3_client.reclassify_transport_result transport_result) S3_client.interpret_get with
+  match Result.bind (S3_client.For_testing.reclassify_transport_result transport_result) S3_client.For_testing.interpret_get with
   | Error Not_found -> ()
   | Error e -> Alcotest.failf "expected Not_found, got %s" (S3_error.to_string e)
   | Ok _ -> Alcotest.fail "expected an error"
@@ -76,42 +76,42 @@ let test_reclassify_passes_through_genuine_transport_errors () =
     Error (Aws_error.Network_error "connection refused")
   in
   Alcotest.(check bool) "a genuine transport error (not an HTTP status) stays S3_error.Aws" true
-    (match S3_client.reclassify_transport_result transport_result with Error (Aws _) -> true | _ -> false)
+    (match S3_client.For_testing.reclassify_transport_result transport_result with Error (Aws _) -> true | _ -> false)
 
 let test_reclassify_passes_through_success () =
   let transport_result : (int * (string * string) list * string, Aws_error.t) result = Ok (200, [], "hi") in
   Alcotest.(check bool) "a 2xx Ok passes through unchanged" true
-    (S3_client.reclassify_transport_result transport_result = Ok (200, [], "hi"))
+    (S3_client.For_testing.reclassify_transport_result transport_result = Ok (200, [], "hi"))
 
 (* interpret_* are tested directly rather than via a mock server — see
    s3_client.ml's top comment (signed_request always negotiates real TLS). *)
 
 let test_interpret_put_success () =
-  Alcotest.(check bool) "200 -> Ok ()" true (Result.is_ok (S3_client.interpret_put (200, [], "")))
+  Alcotest.(check bool) "200 -> Ok ()" true (Result.is_ok (S3_client.For_testing.interpret_put (200, [], "")))
 
 let test_interpret_put_error () =
-  match S3_client.interpret_put (403, [], not_found_xml) with
+  match S3_client.For_testing.interpret_put (403, [], not_found_xml) with
   | Error (S3_error.Service_error { code = "NoSuchKey"; status = 403; _ }) -> ()
   | _ -> Alcotest.fail "expected Service_error"
 
 let test_interpret_get_success () =
-  match S3_client.interpret_get (200, [], "object contents") with
+  match S3_client.For_testing.interpret_get (200, [], "object contents") with
   | Ok body -> Alcotest.(check string) "200 -> Ok body" "object contents" body
   | Error e -> Alcotest.fail (S3_error.to_string e)
 
 let test_interpret_get_not_found () =
   Alcotest.(check bool) "404 -> Not_found" true
-    (match S3_client.interpret_get (404, [], not_found_xml) with Error Not_found -> true | _ -> false)
+    (match S3_client.For_testing.interpret_get (404, [], not_found_xml) with Error Not_found -> true | _ -> false)
 
 let test_interpret_delete_success () =
-  Alcotest.(check bool) "204 -> Ok ()" true (Result.is_ok (S3_client.interpret_delete (204, [], "")))
+  Alcotest.(check bool) "204 -> Ok ()" true (Result.is_ok (S3_client.For_testing.interpret_delete (204, [], "")))
 
 let test_interpret_head_success () =
   let headers =
     [ ("Content-Length", "42"); ("ETag", "\"abc123\""); ("Content-Type", "text/plain");
       ("Last-Modified", "Wed, 26 Aug 2026 00:00:00 GMT") ]
   in
-  match S3_client.interpret_head (200, headers, "") with
+  match S3_client.For_testing.interpret_head (200, headers, "") with
   | Error e -> Alcotest.fail (S3_error.to_string e)
   | Ok { content_length; etag; content_type; last_modified } ->
     Alcotest.(check (option int)) "content_length" (Some 42) content_length;
@@ -122,7 +122,7 @@ let test_interpret_head_success () =
 let test_interpret_head_case_insensitive_headers () =
   (* Real servers vary header casing; find_header_case_insensitive must compare
      case-insensitively rather than expecting a canonical form. *)
-  match S3_client.interpret_head (200, [ ("content-length", "7"); ("etag", "\"x\"") ], "") with
+  match S3_client.For_testing.interpret_head (200, [ ("content-length", "7"); ("etag", "\"x\"") ], "") with
   | Error e -> Alcotest.fail (S3_error.to_string e)
   | Ok { content_length; etag; _ } ->
     Alcotest.(check (option int)) "content_length" (Some 7) content_length;
@@ -132,7 +132,7 @@ let test_interpret_head_not_found_has_no_body_to_parse () =
   (* A HEAD 404 has an empty body (HTTP semantics) — of_response still
      classifies status 404 as Not_found unconditionally, body or no body. *)
   Alcotest.(check bool) "404 with empty body -> Not_found" true
-    (match S3_client.interpret_head (404, [], "") with Error Not_found -> true | _ -> false)
+    (match S3_client.For_testing.interpret_head (404, [], "") with Error Not_found -> true | _ -> false)
 
 let () =
   Alcotest.run "s3_client"

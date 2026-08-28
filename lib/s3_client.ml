@@ -139,3 +139,15 @@ let head_object ~net ~clock config ~key =
   match send_request ~net ~clock config ~meth:`HEAD ~key () with
   | Error _ as e -> e
   | Ok r -> interpret_head r
+
+module For_testing = struct
+  type raw_response = int * (string * string) list * string
+
+  let host_and_path = host_and_path
+  let validate_config = validate_config
+  let reclassify_transport_result = reclassify_transport_result
+  let interpret_put = interpret_put
+  let interpret_get = interpret_get
+  let interpret_delete = interpret_delete
+  let interpret_head = interpret_head
+end
