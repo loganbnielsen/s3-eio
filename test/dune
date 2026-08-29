@@ -4,6 +4,11 @@
  (libraries s3_eio aws-eio alcotest))
 
 (test
+ (name test_s3_client)
+ (modules test_s3_client)
+ (libraries s3_eio aws-eio alcotest eio_main))
+
+(test
  (name test_s3_live)
  (modules test_s3_live)
  (libraries s3_eio aws-eio alcotest eio_main))

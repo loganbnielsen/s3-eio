@@ -24,24 +24,49 @@ let create ~net ~clock config =
     config;
   }
 
+(* int_of_string_opt accepts OCaml numeric-literal syntax (0x50, 8_000, +80),
+   not just decimal port numbers — reject anything with a non-digit first. *)
+let parse_port endpoint port =
+  if port <> "" && String.for_all (fun c -> c >= '0' && c <= '9') port then
+    match int_of_string_opt port with
+    | Some port when port > 0 && port <= 65535 -> Ok (Some port)
+    | _ -> Error (S3_error.Invalid_config ("endpoint has an invalid port: " ^ endpoint))
+  else Error (S3_error.Invalid_config ("endpoint has an invalid port: " ^ endpoint))
+
 (* Bracket-aware: splitting "[::1]:9000" on the last colon would cut into the
    IPv6 address itself; RFC 3986's "[host]:port" convention disambiguates. *)
-let split_host_port endpoint =
+let parse_endpoint endpoint =
+  let host_port host port =
+    if host = "" then Error (S3_error.Invalid_config "endpoint host is empty")
+    else Ok (host, port)
+  in
   if String.length endpoint > 0 && endpoint.[0] = '[' then
     match String.index_opt endpoint ']' with
-    | None -> (endpoint, None)
+    | None -> Error (S3_error.Invalid_config "IPv6 endpoint is missing closing bracket")
     | Some close ->
       let host = String.sub endpoint 1 (close - 1) in
       let rest = String.sub endpoint (close + 1) (String.length endpoint - close - 1) in
-      let port =
-        if String.length rest > 1 && rest.[0] = ':' then int_of_string_opt (String.sub rest 1 (String.length rest - 1))
-        else None
-      in
-      (host, port)
+      if rest = "" then host_port host None
+      else if String.length rest > 1 && rest.[0] = ':' then
+        match parse_port endpoint (String.sub rest 1 (String.length rest - 1)) with
+        | Error _ as e -> e
+        | Ok port -> host_port host port
+      else Error (S3_error.Invalid_config "IPv6 endpoint must be [host] or [host]:port")
   else
     match String.rindex_opt endpoint ':' with
-    | Some i -> (String.sub endpoint 0 i, int_of_string_opt (String.sub endpoint (i + 1) (String.length endpoint - i - 1)))
-    | None -> (endpoint, None)
+    | Some i ->
+      let host = String.sub endpoint 0 i in
+      if String.contains host ':' then Error (S3_error.Invalid_config "IPv6 endpoint must be bracketed")
+      else if String.contains endpoint '[' || String.contains endpoint ']' then
+        Error (S3_error.Invalid_config "endpoint has invalid brackets")
+      else (
+        match parse_port endpoint (String.sub endpoint (i + 1) (String.length endpoint - i - 1)) with
+        | Error _ as e -> e
+        | Ok port -> host_port host port)
+    | None ->
+      if String.contains endpoint '[' || String.contains endpoint ']' then
+        Error (S3_error.Invalid_config "endpoint has invalid brackets")
+      else host_port endpoint None
 
 let has_crlf s = String.exists (fun c -> c = '\r' || c = '\n') s
 
@@ -58,10 +83,11 @@ let validate_config config =
 
 let host_port_and_path config ~key =
   match config.endpoint with
-  | None -> (Printf.sprintf "%s.s3.%s.amazonaws.com" config.bucket config.region, None, "/" ^ key)
+  | None -> Ok (Printf.sprintf "%s.s3.%s.amazonaws.com" config.bucket config.region, None, "/" ^ key)
   | Some endpoint ->
-    let host, port = split_host_port endpoint in
-    (host, port, "/" ^ config.bucket ^ "/" ^ key)
+    match parse_endpoint endpoint with
+    | Error _ as e -> e
+    | Ok (host, port) -> Ok (host, port, "/" ^ config.bucket ^ "/" ^ key)
 
 let ( let* ) = Result.bind
 
@@ -86,8 +112,8 @@ let reclassify_transport_result :
 
 let send_request ~net ~clock config ~meth ~key ?query ?body () =
   let* () = validate_config config in
+  let* host, port, path = host_port_and_path config ~key in
   let* creds = resolve_credentials ~net ~clock config in
-  let host, port, path = host_port_and_path config ~key in
   reclassify_transport_result
     (Aws_http.signed_request ~net ~clock
        ~access_key_id:creds.access_key_id

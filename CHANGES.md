@@ -7,6 +7,9 @@
   `head_object` take that handle instead of repeating `~net ~clock config`.
 - Hid internal request/interpreter helpers from the installed interface; the
   public API is the client handle plus object operations.
+- Custom endpoints now validate host/port syntax and return
+  `Invalid_config` for malformed values before credential resolution or
+  network I/O.
 
 ## 0.1.0
 
