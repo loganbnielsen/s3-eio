@@ -41,13 +41,13 @@ let config () =
 let live_key = "sun-live-test/s3-eio-smoke.txt"
 let live_body = "s3-eio live smoke test"
 
-let with_live_object ~net ~clock config f =
-  match S3_client.put_object ~net ~clock config ~key:live_key ~body:live_body with
+let with_live_object client f =
+  match S3_client.put_object client ~key:live_key ~body:live_body with
   | Error e -> Alcotest.failf "PutObject failed: %s" (S3_error.to_string e)
   | Ok () ->
     Fun.protect
       ~finally:(fun () ->
-        match S3_client.delete_object ~net ~clock config ~key:live_key with
+        match S3_client.delete_object client ~key:live_key with
         | Ok () | Error _ -> ())
       (fun () -> f ())
 
@@ -56,15 +56,14 @@ let test_put_head_get_delete_roundtrip () =
     Printf.printf "[skip] S3_EIO_LIVE not set to 1 — skipping live S3 smoke test\n%!"
   else
     Eio_main.run @@ fun env ->
-    let net = env#net and clock = env#clock in
-    let config = config () in
-    with_live_object ~net ~clock config (fun () ->
-        (match S3_client.head_object ~net ~clock config ~key:live_key with
+    let client = S3_client.create ~net:env#net ~clock:env#clock (config ()) in
+    with_live_object client (fun () ->
+        (match S3_client.head_object client ~key:live_key with
          | Error e -> Alcotest.failf "HeadObject failed: %s" (S3_error.to_string e)
          | Ok { content_length; _ } ->
            Alcotest.(check (option int)) "Content-Length matches the body we wrote"
              (Some (String.length live_body)) content_length);
-        match S3_client.get_object ~net ~clock config ~key:live_key with
+        match S3_client.get_object client ~key:live_key with
         | Error e -> Alcotest.failf "GetObject failed: %s" (S3_error.to_string e)
         | Ok body -> Alcotest.(check string) "round-tripped body" live_body body)
 
@@ -73,8 +72,8 @@ let test_missing_key_error_path () =
     Printf.printf "[skip] S3_EIO_LIVE not set to 1 — skipping live S3 smoke test\n%!"
   else
     Eio_main.run @@ fun env ->
-    let config = config () in
-    match S3_client.head_object ~net:env#net ~clock:env#clock config ~key:"sun-live-test/does-not-exist.txt" with
+    let client = S3_client.create ~net:env#net ~clock:env#clock (config ()) in
+    match S3_client.head_object client ~key:"sun-live-test/does-not-exist.txt" with
     | Error S3_error.Not_found -> ()
     | Error e -> Alcotest.failf "expected Not_found, got %s" (S3_error.to_string e)
     | Ok _ -> Alcotest.fail "expected the known-missing key to 404"

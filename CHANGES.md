@@ -1,5 +1,13 @@
 # Changes
 
+## Unreleased
+
+- `S3_client` now captures Eio capabilities in a client handle:
+  `create ~net ~clock config`, then `put_object`/`get_object`/`delete_object`/
+  `head_object` take that handle instead of repeating `~net ~clock config`.
+- Hid internal request/interpreter helpers from the installed interface; the
+  public API is the client handle plus object operations.
+
 ## 0.1.0
 
 - Initial standalone OPAM package, extracted from Sun: `S3_client`
@@ -13,10 +21,3 @@
   actually sent as a header, which S3 rejects outright).
 - Rename pass (internal only, no public-API change): `call`→`send_request`,
   `header_ci`→`find_header_case_insensitive`, `resp_body`→`body`.
-- Public-API cleanup: internal helpers (`interpret_put`/`interpret_get`/
-  `interpret_delete`/`interpret_head`, `reclassify_transport_result`,
-  `host_and_path`, `validate_config`) moved into a `For_testing` submodule
-  instead of sitting bare in the top-level signature, so the `.mli` itself
-  states they aren't part of the stable contract. The repeated
-  `int * (string * string) list * string` transport-response shape given a
-  name: `For_testing.raw_response`.
