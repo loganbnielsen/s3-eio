@@ -24,6 +24,9 @@ let test_invalid_endpoints_return_invalid_config () =
       "localhost:";
       "localhost:abc";
       "localhost:70000";
+      "localhost:0x50";
+      "localhost:8_000";
+      "localhost:+80";
       "::1";
       "[::1";
       "[::1]x";

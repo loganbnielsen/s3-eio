@@ -24,10 +24,14 @@ let create ~net ~clock config =
     config;
   }
 
+(* int_of_string_opt accepts OCaml numeric-literal syntax (0x50, 8_000, +80),
+   not just decimal port numbers — reject anything with a non-digit first. *)
 let parse_port endpoint port =
-  match int_of_string_opt port with
-  | Some port when port > 0 && port <= 65535 -> Ok (Some port)
-  | _ -> Error (S3_error.Invalid_config ("endpoint has an invalid port: " ^ endpoint))
+  if port <> "" && String.for_all (fun c -> c >= '0' && c <= '9') port then
+    match int_of_string_opt port with
+    | Some port when port > 0 && port <= 65535 -> Ok (Some port)
+    | _ -> Error (S3_error.Invalid_config ("endpoint has an invalid port: " ^ endpoint))
+  else Error (S3_error.Invalid_config ("endpoint has an invalid port: " ^ endpoint))
 
 (* Bracket-aware: splitting "[::1]:9000" on the last colon would cut into the
    IPv6 address itself; RFC 3986's "[host]:port" convention disambiguates. *)
