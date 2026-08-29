@@ -1,4 +1,4 @@
-(** Error type for {!S3_client}, extending {!Aws_error.t} the same way
+(** Error type for {!S3_client}, extending [Aws_error.t] the same way
     [kafka-eio-service]'s [Kafka_error.t] extends the raw librdkafka codes. *)
 
 type t =
@@ -16,8 +16,7 @@ type t =
       (** [config.bucket]/[config.region]/[config.endpoint] failed a
           fail-closed CR/LF check before being used to build a request —
           these become an unencoded HTTP [Host] header, so untrusted input
-          could otherwise inject header lines. See
-          {!S3_client.host_port_and_path}. *)
+          could otherwise inject header lines. *)
 
 val of_response : status:int -> body:string -> t
 (** Classify a non-2xx S3 response: 404 becomes [Not_found]; a body that

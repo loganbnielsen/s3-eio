@@ -12,6 +12,18 @@ type head_info = {
   content_type : string option;
 }
 
+type t = {
+  net : [`Generic] Eio.Net.ty Eio.Std.r;
+  clock : float Eio.Time.clock_ty Eio.Std.r;
+  config : config;
+}
+
+let create ~net ~clock config =
+  { net = (net :> [`Generic] Eio.Net.ty Eio.Std.r);
+    clock = (clock :> float Eio.Time.clock_ty Eio.Std.r);
+    config;
+  }
+
 (* Bracket-aware: splitting "[::1]:9000" on the last colon would cut into the
    IPv6 address itself; RFC 3986's "[host]:port" convention disambiguates. *)
 let split_host_port endpoint =
@@ -50,10 +62,6 @@ let host_port_and_path config ~key =
   | Some endpoint ->
     let host, port = split_host_port endpoint in
     (host, port, "/" ^ config.bucket ^ "/" ^ key)
-
-let host_and_path config ~key =
-  let host, _port, path = host_port_and_path config ~key in
-  (host, path)
 
 let ( let* ) = Result.bind
 
@@ -120,34 +128,22 @@ let interpret_head (status, headers, body) =
       }
   else Error (S3_error.of_response ~status ~body)
 
-let put_object ~net ~clock config ~key ~body =
-  match send_request ~net ~clock config ~meth:`PUT ~key ~body () with
+let put_object t ~key ~body =
+  match send_request ~net:t.net ~clock:t.clock t.config ~meth:`PUT ~key ~body () with
   | Error _ as e -> e
   | Ok r -> interpret_put r
 
-let get_object ~net ~clock config ~key =
-  match send_request ~net ~clock config ~meth:`GET ~key () with
+let get_object t ~key =
+  match send_request ~net:t.net ~clock:t.clock t.config ~meth:`GET ~key () with
   | Error _ as e -> e
   | Ok r -> interpret_get r
 
-let delete_object ~net ~clock config ~key =
-  match send_request ~net ~clock config ~meth:`DELETE ~key () with
+let delete_object t ~key =
+  match send_request ~net:t.net ~clock:t.clock t.config ~meth:`DELETE ~key () with
   | Error _ as e -> e
   | Ok r -> interpret_delete r
 
-let head_object ~net ~clock config ~key =
-  match send_request ~net ~clock config ~meth:`HEAD ~key () with
+let head_object t ~key =
+  match send_request ~net:t.net ~clock:t.clock t.config ~meth:`HEAD ~key () with
   | Error _ as e -> e
   | Ok r -> interpret_head r
-
-module For_testing = struct
-  type raw_response = int * (string * string) list * string
-
-  let host_and_path = host_and_path
-  let validate_config = validate_config
-  let reclassify_transport_result = reclassify_transport_result
-  let interpret_put = interpret_put
-  let interpret_get = interpret_get
-  let interpret_delete = interpret_delete
-  let interpret_head = interpret_head
-end

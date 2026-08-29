@@ -38,19 +38,6 @@ gated by `S3_EIO_LIVE=1` (real bucket + credentials required) is in
 a dedicated bucket for it in your own AWS account (`scripts/teardown.sh`
 removes it) — see their headers for usage.
 
-## Test strategy
-
-`aws-eio`'s `signed_request` always negotiates real TLS — there is no
-plain-HTTP mode to point at a lightweight local mock server, and TLS/SNI
-construction rejects bare IP literals like `127.0.0.1` as syntactically
-invalid hostnames. Building a real self-signed-TLS mock server would work but
-is heavy infrastructure for what's actually thin glue code. Instead,
-`S3_client`'s `(status, headers, body) -> result` mapping per operation is
-factored out as pure `interpret_put`/`interpret_get`/`interpret_delete`/
-`interpret_head` functions, unit-tested directly with synthetic responses —
-no network or TLS involved. The wire/TLS path itself is already proven by
-`aws-eio`'s own test suite and by this package's own live test.
-
 ## Host addressing
 
 Two modes, chosen by whether `config.endpoint` is set:
@@ -152,7 +139,8 @@ let config =
     credentials = Aws_credentials.of_env ~region:"us-east-1" ();
     endpoint = None }
 in
-match S3_client.put_object ~net ~clock config ~key:"path/to/object" ~body:"hello" with
+let client = S3_client.create ~net ~clock config in
+match S3_client.put_object client ~key:"path/to/object" ~body:"hello" with
 | Ok () -> ()
 | Error e -> Printf.eprintf "%s\n" (S3_error.to_string e)
 ```
