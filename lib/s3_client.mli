@@ -11,7 +11,10 @@ type config = {
           ([bucket.s3.region.amazonaws.com]). [Some host_port]: path-style
           against that host ([host_port/bucket/key]) — for a local
           S3-compatible test server, which can't provide a real
-          [bucket.<host>] subdomain to resolve. *)
+          [bucket.<host>] subdomain to resolve. [host_port] must be
+          [host], [host:port], bracketed IPv6 ([::1]), or bracketed IPv6
+          with a port ([::1]:9000); malformed values return
+          [Error (Invalid_config _)] from operations. *)
 }
 
 type head_info = {
