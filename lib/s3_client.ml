@@ -15,12 +15,14 @@ type head_info = {
 type t = {
   net : [`Generic] Eio.Net.ty Eio.Std.r;
   clock : float Eio.Time.clock_ty Eio.Std.r;
+  fs : Eio.Fs.dir_ty Eio.Path.t;
   config : config;
 }
 
-let create ~net ~clock config =
+let create ~net ~clock ~fs config =
   { net = (net :> [`Generic] Eio.Net.ty Eio.Std.r);
     clock = (clock :> float Eio.Time.clock_ty Eio.Std.r);
+    fs;
     config;
   }
 
@@ -85,7 +87,21 @@ let validate_config config =
   else
     match config.endpoint with
     | Some endpoint when has_crlf endpoint -> Error (S3_error.Invalid_config "endpoint contains a CR or LF character")
-    | _ -> Ok ()
+    | Some _ -> Ok ()
+    | None ->
+      (* Virtual-hosted-style addressing puts bucket.s3.<region>.amazonaws.com
+         under AWS's *.s3.<region>.amazonaws.com wildcard certificate, which
+         (per RFC 6125) only covers one label — a dotted bucket name produces
+         a hostname the cert doesn't match, and TLS verification fails deep
+         inside aws-eio/https-eio with an opaque Network_error instead of
+         this actionable, config-shaped one. Path-style (endpoint <> None)
+         doesn't hit this, so only reject it here. *)
+      if String.contains config.bucket '.' then
+        Error (S3_error.Invalid_config
+          "bucket name contains '.', which breaks TLS certificate validation under \
+           virtual-hosted-style addressing (endpoint = None); pass ~endpoint for path-style \
+           addressing instead")
+      else Ok ()
 
 let host_port_and_path config ~key =
   match config.endpoint with
@@ -97,8 +113,8 @@ let host_port_and_path config ~key =
 
 let ( let* ) = Result.bind
 
-let resolve_credentials ~net ~clock config =
-  match Aws_credentials.resolve ~net ~clock config.credentials with
+let resolve_credentials ~net ~clock ~fs config =
+  match Aws_credentials.resolve ~net ~clock ~fs config.credentials with
   | Error e -> Error (S3_error.Aws e)
   | Ok creds -> Ok creds
 
@@ -116,10 +132,10 @@ let reclassify_transport_result :
   | Error e -> Error (S3_error.Aws e)
   | Ok (status, headers, body) -> Ok (status, headers, body)
 
-let send_request ~net ~clock config ~meth ~key ?query ?body () =
+let send_request ~net ~clock ~fs config ~meth ~key ?query ?body () =
   let* () = validate_config config in
   let* host, port, path = host_port_and_path config ~key in
-  let* creds = resolve_credentials ~net ~clock config in
+  let* creds = resolve_credentials ~net ~clock ~fs config in
   reclassify_transport_result
     (Aws_http.signed_request ~net ~clock
        ~access_key_id:creds.access_key_id
@@ -171,21 +187,21 @@ let interpret_head (status, headers, body) =
   else Error (S3_error.of_response ~status ~body)
 
 let put_object t ~key ~body =
-  match send_request ~net:t.net ~clock:t.clock t.config ~meth:`PUT ~key ~body () with
+  match send_request ~net:t.net ~clock:t.clock ~fs:t.fs t.config ~meth:`PUT ~key ~body () with
   | Error _ as e -> e
   | Ok r -> interpret_put r
 
 let get_object t ~key =
-  match send_request ~net:t.net ~clock:t.clock t.config ~meth:`GET ~key () with
+  match send_request ~net:t.net ~clock:t.clock ~fs:t.fs t.config ~meth:`GET ~key () with
   | Error _ as e -> e
   | Ok r -> interpret_get r
 
 let delete_object t ~key =
-  match send_request ~net:t.net ~clock:t.clock t.config ~meth:`DELETE ~key () with
+  match send_request ~net:t.net ~clock:t.clock ~fs:t.fs t.config ~meth:`DELETE ~key () with
   | Error _ as e -> e
   | Ok r -> interpret_delete r
 
 let head_object t ~key =
-  match send_request ~net:t.net ~clock:t.clock t.config ~meth:`HEAD ~key () with
+  match send_request ~net:t.net ~clock:t.clock ~fs:t.fs t.config ~meth:`HEAD ~key () with
   | Error _ as e -> e
   | Ok r -> interpret_head r

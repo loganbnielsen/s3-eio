@@ -139,7 +139,7 @@ let config =
     credentials = Aws_credentials.of_env ~region:"us-east-1" ();
     endpoint = None }
 in
-let client = S3_client.create ~net ~clock config in
+let client = S3_client.create ~net ~clock ~fs config in
 match S3_client.put_object client ~key:"path/to/object" ~body:"hello" with
 | Ok () -> ()
 | Error e -> Printf.eprintf "%s\n" (S3_error.to_string e)
