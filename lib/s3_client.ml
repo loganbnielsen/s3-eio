@@ -33,11 +33,17 @@ let parse_port endpoint port =
     | _ -> Error (S3_error.Invalid_config ("endpoint has an invalid port: " ^ endpoint))
   else Error (S3_error.Invalid_config ("endpoint has an invalid port: " ^ endpoint))
 
+let valid_endpoint_host_char = function
+  | '\000' .. ' ' | '\127' | '/' | '?' | '#' -> false
+  | _ -> true
+
 (* Bracket-aware: splitting "[::1]:9000" on the last colon would cut into the
    IPv6 address itself; RFC 3986's "[host]:port" convention disambiguates. *)
 let parse_endpoint endpoint =
   let host_port host port =
     if host = "" then Error (S3_error.Invalid_config "endpoint host is empty")
+    else if not (String.for_all valid_endpoint_host_char host) then
+      Error (S3_error.Invalid_config ("endpoint has an invalid host: " ^ endpoint))
     else Ok (host, port)
   in
   if String.length endpoint > 0 && endpoint.[0] = '[' then
