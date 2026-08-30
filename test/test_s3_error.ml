@@ -43,6 +43,13 @@ let test_empty_body_is_unparseable () =
      | Unparseable_error_response { status = 500; body = "" } -> true
      | _ -> false)
 
+let test_malformed_response_message () =
+  let msg =
+    S3_error.to_string (Malformed_response { header = "content-length"; value = "abc" })
+  in
+  Alcotest.(check string) "names the header and quotes the bad value"
+    {|malformed content-length header in S3 response: "abc"|} msg
+
 let () =
   Alcotest.run "s3_error"
     [ ( "of_response",
@@ -52,5 +59,9 @@ let () =
           Alcotest.test_case "parseable <Error> body -> Service_error" `Quick test_parseable_error_body;
           Alcotest.test_case "malformed body -> Unparseable_error_response" `Quick test_unparseable_body;
           Alcotest.test_case "empty body -> Unparseable_error_response" `Quick test_empty_body_is_unparseable;
+        ] );
+      ( "to_string",
+        [ Alcotest.test_case "Malformed_response names header and value" `Quick
+            test_malformed_response_message;
         ] );
     ]

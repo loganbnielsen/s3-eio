@@ -17,6 +17,12 @@ type t =
           fail-closed CR/LF check before being used to build a request —
           these become an unencoded HTTP [Host] header, so untrusted input
           could otherwise inject header lines. *)
+  | Malformed_response of { header : string; value : string }
+      (** A 2xx response carried the named header but its value didn't parse
+          in the shape S3 always sends — e.g. a non-numeric
+          [Content-Length]. Distinct from the header being absent, which is
+          not an error: absent fields decode to [None] in the operation's
+          result record. *)
 
 val of_response : status:int -> body:string -> t
 (** Classify a non-2xx S3 response: 404 becomes [Not_found]; a body that

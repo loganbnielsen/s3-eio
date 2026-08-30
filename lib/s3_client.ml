@@ -151,13 +151,23 @@ let interpret_delete (status, _headers, body) =
    parsing bug. *)
 let interpret_head (status, headers, body) =
   if status >= 200 && status < 300 then
-    Ok
-      { content_length =
-          find_header_case_insensitive "content-length" headers |> Option.map int_of_string_opt |> Option.join;
-        etag = find_header_case_insensitive "etag" headers;
-        last_modified = find_header_case_insensitive "last-modified" headers;
-        content_type = find_header_case_insensitive "content-type" headers;
-      }
+    let content_length =
+      match find_header_case_insensitive "content-length" headers with
+      | None -> Ok None
+      | Some v ->
+        (match int_of_string_opt v with
+         | Some n -> Ok (Some n)
+         | None -> Error (S3_error.Malformed_response { header = "content-length"; value = v }))
+    in
+    match content_length with
+    | Error _ as e -> e
+    | Ok content_length ->
+      Ok
+        { content_length;
+          etag = find_header_case_insensitive "etag" headers;
+          last_modified = find_header_case_insensitive "last-modified" headers;
+          content_type = find_header_case_insensitive "content-type" headers;
+        }
   else Error (S3_error.of_response ~status ~body)
 
 let put_object t ~key ~body =

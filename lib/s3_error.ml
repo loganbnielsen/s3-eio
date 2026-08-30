@@ -4,6 +4,7 @@ type t =
   | Service_error of { code : string; message : string; status : int }
   | Unparseable_error_response of { status : int; body : string }
   | Invalid_config of string
+  | Malformed_response of { header : string; value : string }
 
 (* Deliberately non-general: a substring search for "<Tag>text</Tag>" rather
    than a structural XML parse. Works because S3 error documents' Code/Message
@@ -40,3 +41,5 @@ let to_string = function
   | Unparseable_error_response { status; body } ->
     Printf.sprintf "S3 error %d, unparseable response: %s" status body
   | Invalid_config msg -> "invalid s3-eio config: " ^ msg
+  | Malformed_response { header; value } ->
+    Printf.sprintf "malformed %s header in S3 response: %S" header value
