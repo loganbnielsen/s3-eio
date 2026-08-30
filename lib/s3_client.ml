@@ -2,7 +2,13 @@ type config = {
   bucket : string;
   region : string;
   credentials : Aws_credentials.t;
-  endpoint : string option;
+  endpoint : endpoint option;
+}
+
+and endpoint = {
+  scheme : [ `Http | `Https ];
+  host : string;
+  port : int option;
 }
 
 type head_info = {
@@ -26,55 +32,19 @@ let create ~net ~clock ~fs config =
     config;
   }
 
-(* int_of_string_opt accepts OCaml numeric-literal syntax (0x50, 8_000, +80),
-   not just decimal port numbers — reject anything with a non-digit first. *)
-let parse_port endpoint port =
-  if port <> "" && String.for_all (fun c -> c >= '0' && c <= '9') port then
-    match int_of_string_opt port with
-    | Some port when port > 0 && port <= 65535 -> Ok (Some port)
-    | _ -> Error (S3_error.Invalid_config ("endpoint has an invalid port: " ^ endpoint))
-  else Error (S3_error.Invalid_config ("endpoint has an invalid port: " ^ endpoint))
-
 let valid_endpoint_host_char = function
-  | '\000' .. ' ' | '\127' | '/' | '?' | '#' -> false
+  | '\000' .. ' ' | '\127' | '/' | '?' | '#' | '[' | ']' -> false
   | _ -> true
 
-(* Bracket-aware: splitting "[::1]:9000" on the last colon would cut into the
-   IPv6 address itself; RFC 3986's "[host]:port" convention disambiguates. *)
-let parse_endpoint endpoint =
-  let host_port host port =
-    if host = "" then Error (S3_error.Invalid_config "endpoint host is empty")
-    else if not (String.for_all valid_endpoint_host_char host) then
-      Error (S3_error.Invalid_config ("endpoint has an invalid host: " ^ endpoint))
-    else Ok (host, port)
-  in
-  if String.length endpoint > 0 && endpoint.[0] = '[' then
-    match String.index_opt endpoint ']' with
-    | None -> Error (S3_error.Invalid_config "IPv6 endpoint is missing closing bracket")
-    | Some close ->
-      let host = String.sub endpoint 1 (close - 1) in
-      let rest = String.sub endpoint (close + 1) (String.length endpoint - close - 1) in
-      if rest = "" then host_port host None
-      else if String.length rest > 1 && rest.[0] = ':' then
-        match parse_port endpoint (String.sub rest 1 (String.length rest - 1)) with
-        | Error _ as e -> e
-        | Ok port -> host_port host port
-      else Error (S3_error.Invalid_config "IPv6 endpoint must be [host] or [host]:port")
+let validate_endpoint endpoint =
+  if endpoint.host = "" then Error (S3_error.Invalid_config "endpoint host is empty")
+  else if not (String.for_all valid_endpoint_host_char endpoint.host) then
+    Error (S3_error.Invalid_config ("endpoint has an invalid host: " ^ endpoint.host))
   else
-    match String.rindex_opt endpoint ':' with
-    | Some i ->
-      let host = String.sub endpoint 0 i in
-      if String.contains host ':' then Error (S3_error.Invalid_config "IPv6 endpoint must be bracketed")
-      else if String.contains endpoint '[' || String.contains endpoint ']' then
-        Error (S3_error.Invalid_config "endpoint has invalid brackets")
-      else (
-        match parse_port endpoint (String.sub endpoint (i + 1) (String.length endpoint - i - 1)) with
-        | Error _ as e -> e
-        | Ok port -> host_port host port)
-    | None ->
-      if String.contains endpoint '[' || String.contains endpoint ']' then
-        Error (S3_error.Invalid_config "endpoint has invalid brackets")
-      else host_port endpoint None
+    match endpoint.port with
+    | Some port when port <= 0 || port > 65535 ->
+      Error (S3_error.Invalid_config ("endpoint has an invalid port: " ^ string_of_int port))
+    | _ -> Ok ()
 
 let has_crlf s = String.exists (fun c -> c = '\r' || c = '\n') s
 
@@ -86,8 +56,8 @@ let validate_config config =
   else if has_crlf config.region then Error (S3_error.Invalid_config "region contains a CR or LF character")
   else
     match config.endpoint with
-    | Some endpoint when has_crlf endpoint -> Error (S3_error.Invalid_config "endpoint contains a CR or LF character")
-    | Some _ -> Ok ()
+    | Some endpoint when has_crlf endpoint.host -> Error (S3_error.Invalid_config "endpoint host contains a CR or LF character")
+    | Some endpoint -> validate_endpoint endpoint
     | None ->
       (* Virtual-hosted-style addressing puts bucket.s3.<region>.amazonaws.com
          under AWS's *.s3.<region>.amazonaws.com wildcard certificate, which
@@ -105,11 +75,8 @@ let validate_config config =
 
 let host_port_and_path config ~key =
   match config.endpoint with
-  | None -> Ok (Printf.sprintf "%s.s3.%s.amazonaws.com" config.bucket config.region, None, "/" ^ key)
-  | Some endpoint ->
-    match parse_endpoint endpoint with
-    | Error _ as e -> e
-    | Ok (host, port) -> Ok (host, port, "/" ^ config.bucket ^ "/" ^ key)
+  | None -> Ok (`Https, Printf.sprintf "%s.s3.%s.amazonaws.com" config.bucket config.region, None, "/" ^ key)
+  | Some endpoint -> Ok (endpoint.scheme, endpoint.host, endpoint.port, "/" ^ config.bucket ^ "/" ^ key)
 
 let ( let* ) = Result.bind
 
@@ -134,10 +101,10 @@ let reclassify_transport_result :
 
 let send_request ~net ~clock ~fs config ~meth ~key ?query ?body () =
   let* () = validate_config config in
-  let* host, port, path = host_port_and_path config ~key in
+  let* scheme, host, port, path = host_port_and_path config ~key in
   let* creds = resolve_credentials ~net ~clock ~fs config in
   reclassify_transport_result
-    (Aws_http.signed_request ~net ~clock
+    (Aws_http.signed_request ~net ~clock ~scheme
        ~access_key_id:creds.access_key_id
        ~secret_access_key:creds.secret_access_key
        ?session_token:creds.session_token
