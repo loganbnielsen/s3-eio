@@ -9,32 +9,25 @@ let client ~net ~clock ~fs endpoint =
     { bucket = "bucket";
       region = "us-east-1";
       credentials = static_credentials;
-      endpoint = Some endpoint;
+      endpoint;
     }
 
 let test_invalid_endpoints_return_invalid_config () =
   Eio_main.run @@ fun env ->
   List.iter
     (fun endpoint ->
-      match S3_client.head_object (client ~net:env#net ~clock:env#clock ~fs:env#fs endpoint) ~key:"key" with
+      match S3_client.head_object (client ~net:env#net ~clock:env#clock ~fs:env#fs (Some endpoint)) ~key:"key" with
       | Error (S3_error.Invalid_config _) -> ()
-      | Error e -> Alcotest.failf "%s: expected Invalid_config, got %s" endpoint (S3_error.to_string e)
-      | Ok _ -> Alcotest.failf "%s: expected Invalid_config" endpoint)
-    [ "";
-      "localhost:";
-      "localhost:abc";
-      "localhost:70000";
-      "localhost:0x50";
-      "localhost:8_000";
-      "localhost:+80";
-      "::1";
-      "[::1";
-      "[::1]x";
-      "local]host";
-      "local host";
-      "localhost/path";
-      "localhost?x=1";
-      "localhost#frag";
+      | Error e -> Alcotest.failf "%s: expected Invalid_config, got %s" endpoint.S3_client.host (S3_error.to_string e)
+      | Ok _ -> Alcotest.failf "%s: expected Invalid_config" endpoint.S3_client.host)
+    [ { S3_client.scheme = `Http; host = ""; port = None };
+      { scheme = `Http; host = "localhost"; port = Some 70000 };
+      { scheme = `Http; host = "localhost"; port = Some 0 };
+      { scheme = `Http; host = "local host"; port = None };
+      { scheme = `Http; host = "localhost/path"; port = None };
+      { scheme = `Http; host = "localhost?x=1"; port = None };
+      { scheme = `Http; host = "localhost#frag"; port = None };
+      { scheme = `Http; host = "[::1]"; port = Some 9000 };
     ]
 
 (* Regression test: a dotted bucket name under virtual-hosted-style

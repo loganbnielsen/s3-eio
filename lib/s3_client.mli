@@ -6,16 +6,21 @@ type config = {
   bucket : string;
   region : string;
   credentials : Aws_credentials.t;
-  endpoint : string option;
-      (** [None]: real AWS, virtual-hosted-style addressing
-          ([bucket.s3.region.amazonaws.com]). [Some host_port]: path-style
-          against that host ([host_port/bucket/key]) — for a local
-          S3-compatible test server, which can't provide a real
-          [bucket.<host>] subdomain to resolve. [host_port] must be
-          [host], [host:port], bracketed IPv6 ([::1]), or bracketed IPv6
-          with a port ([::1]:9000); malformed values return
-          [Error (Invalid_config _)] from operations. *)
+  endpoint : endpoint option;
+      (** [None]: real AWS over HTTPS, virtual-hosted-style addressing
+          ([bucket.s3.region.amazonaws.com]). [Some endpoint]: path-style
+          against a custom S3-compatible endpoint. *)
 }
+
+and endpoint = {
+  scheme : [ `Http | `Https ];
+  host : string;
+  port : int option;
+}
+(** Custom path-style S3-compatible endpoint. Use [`Http] only for local
+    test servers such as MinIO/Localstack. [host] is a DNS name, IPv4
+    literal, or IPv6 literal without brackets; malformed values return
+    [Error (Invalid_config _)] from operations. *)
 
 type head_info = {
   content_length : int option;
