@@ -31,6 +31,10 @@ let test_invalid_endpoints_return_invalid_config () =
       "[::1";
       "[::1]x";
       "local]host";
+      "local host";
+      "localhost/path";
+      "localhost?x=1";
+      "localhost#frag";
     ]
 
 let () =
