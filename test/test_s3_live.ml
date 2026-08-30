@@ -56,7 +56,7 @@ let test_put_head_get_delete_roundtrip () =
     Printf.printf "[skip] S3_EIO_LIVE not set to 1 — skipping live S3 smoke test\n%!"
   else
     Eio_main.run @@ fun env ->
-    let client = S3_client.create ~net:env#net ~clock:env#clock (config ()) in
+    let client = S3_client.create ~net:env#net ~clock:env#clock ~fs:env#fs (config ()) in
     with_live_object client (fun () ->
         (match S3_client.head_object client ~key:live_key with
          | Error e -> Alcotest.failf "HeadObject failed: %s" (S3_error.to_string e)
@@ -72,7 +72,7 @@ let test_missing_key_error_path () =
     Printf.printf "[skip] S3_EIO_LIVE not set to 1 — skipping live S3 smoke test\n%!"
   else
     Eio_main.run @@ fun env ->
-    let client = S3_client.create ~net:env#net ~clock:env#clock (config ()) in
+    let client = S3_client.create ~net:env#net ~clock:env#clock ~fs:env#fs (config ()) in
     match S3_client.head_object client ~key:"sun-live-test/does-not-exist.txt" with
     | Error S3_error.Not_found -> ()
     | Error e -> Alcotest.failf "expected Not_found, got %s" (S3_error.to_string e)

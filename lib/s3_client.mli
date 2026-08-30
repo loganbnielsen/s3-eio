@@ -26,7 +26,10 @@ type head_info = {
 
 type t
 
-val create : net:_ Eio.Net.t -> clock:_ Eio.Time.clock -> config -> t
+val create : net:_ Eio.Net.t -> clock:_ Eio.Time.clock -> fs:Eio.Fs.dir_ty Eio.Path.t -> config -> t
+(** [fs] is used only when [config.credentials] resolves via [Web_identity]
+    (a Kubernetes-projected service-account token file) — pass
+    [Eio.Stdenv.fs env]. *)
 
 val put_object : t -> key:string -> body:string -> (unit, S3_error.t) result
 
