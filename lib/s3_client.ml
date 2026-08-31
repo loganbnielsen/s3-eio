@@ -1,7 +1,7 @@
 type config = {
   bucket : string;
   region : string;
-  credentials : Aws_credentials.t;
+  credentials : Aws.Credentials.t;
   endpoint : endpoint option;
 }
 
@@ -88,7 +88,7 @@ let host_port_and_path config ~key =
 let ( let* ) = Result.bind
 
 let resolve_credentials ~net ~clock ~fs config =
-  match Aws_credentials.resolve ~net ~clock ~fs config.credentials with
+  match Aws.Credentials.resolve ~net ~clock ~fs config.credentials with
   | Error e -> Error (S3_error.Aws e)
   | Ok creds -> Ok creds
 
@@ -100,9 +100,9 @@ let resolve_credentials ~net ~clock ~fs config =
    non-2xx branches are unreachable. Headers are lost here, matching
    signed_request's own success-only header return. *)
 let reclassify_transport_result :
-    (int * (string * string) list * string, Aws_error.t) result -> (int * (string * string) list * string, S3_error.t) result
+    (int * (string * string) list * string, Aws.Error.t) result -> (int * (string * string) list * string, S3_error.t) result
     = function
-  | Error (Aws_error.Http_error (status, body)) -> Ok (status, [], body)
+  | Error (Aws.Error.Http_error (status, body)) -> Ok (status, [], body)
   | Error e -> Error (S3_error.Aws e)
   | Ok (status, headers, body) -> Ok (status, headers, body)
 
@@ -111,7 +111,7 @@ let send_request ~net ~clock ~fs config ~meth ~key ?query ?body () =
   let* scheme, host, port, path = host_port_and_path config ~key in
   let* creds = resolve_credentials ~net ~clock ~fs config in
   reclassify_transport_result
-    (Aws_http.signed_request ~net ~clock ~scheme
+    (Aws.Http.signed_request ~net ~clock ~scheme
        ~access_key_id:creds.access_key_id
        ~secret_access_key:creds.secret_access_key
        ?session_token:creds.session_token

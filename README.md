@@ -63,7 +63,7 @@ Two modes, chosen by whether `config.endpoint` is set:
   actually points it at a TLS-terminating test server.
 
 `key` is passed as a raw, unencoded string — percent-encoding happens once,
-internally, in `Aws_sigv4.canonical_uri` (the same single-encoder path
+internally, in `Aws.Sigv4.canonical_uri` (the same single-encoder path
 `aws-eio`'s own `signed_request` already uses for every service).
 
 ## Public API
@@ -72,7 +72,7 @@ internally, in `Aws_sigv4.canonical_uri` (the same single-encoder path
 type config = {
   bucket : string;
   region : string;
-  credentials : Aws_credentials.t;
+  credentials : Aws.Credentials.t;
   endpoint : string option;  (** [None] = real AWS virtual-hosted-style; [Some host_port]
                                  = path-style against that host, for test/S3-compatible
                                  servers. *)
@@ -106,7 +106,7 @@ val head_object :
 
 ```ocaml
 type t =
-  | Aws of Aws_error.t                                          (** transport/signature/credential failure *)
+  | Aws of Aws.Error.t                                          (** transport/signature/credential failure *)
   | Not_found                                                    (** 404 — NoSuchKey/NoSuchBucket *)
   | Service_error of { code : string; message : string; status : int }
       (** other non-2xx with a parseable <Error><Code>/<Message> body *)
@@ -125,8 +125,8 @@ val to_string : t -> string
 
 ## Credential resolution
 
-Each call resolves fresh credentials via `Aws_credentials.resolve` — no
-caching, matching `Aws_credentials`'s own documented contract. For `Static`
+Each call resolves fresh credentials via `Aws.Credentials.resolve` — no
+caching, matching `Aws.Credentials`'s own documented contract. For `Static`
 credentials this is free; for `Web_identity`/`Container`/`Imdsv2` it means a
 network round-trip on every S3 call. Caching until `resolved.expiration`
 approaches is real, deferred work (see "Out of Scope").
@@ -136,7 +136,7 @@ approaches is real, deferred work (see "Out of Scope").
 ```ocaml
 let config =
   { S3_client.bucket = "my-bucket"; region = "us-east-1";
-    credentials = Aws_credentials.of_env ~region:"us-east-1" ();
+    credentials = Aws.Credentials.of_env ~region:"us-east-1" ();
     endpoint = None }
 in
 let client = S3_client.create ~net ~clock ~fs config in
