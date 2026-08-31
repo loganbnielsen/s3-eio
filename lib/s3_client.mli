@@ -5,7 +5,7 @@
 type config = {
   bucket : string;
   region : string;
-  credentials : Aws_credentials.t;
+  credentials : Aws.Credentials.t;
   endpoint : endpoint option;
       (** [None]: real AWS over HTTPS, virtual-hosted-style addressing
           ([bucket.s3.region.amazonaws.com]). [Some endpoint]: path-style

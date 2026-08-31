@@ -1,8 +1,8 @@
-(** Error type for {!S3_client}, extending [Aws_error.t] the same way
+(** Error type for {!S3_client}, extending [Aws.Error.t] the same way
     [kafka-eio-service]'s [Kafka_error.t] extends the raw librdkafka codes. *)
 
 type t =
-  | Aws of Aws_error.t
+  | Aws of Aws.Error.t
       (** Transport, signature, or credential-resolution failure from
           [aws-eio] itself. *)
   | Not_found  (** 404 — [NoSuchKey]/[NoSuchBucket]. *)

@@ -1,5 +1,5 @@
 let static_credentials =
-  { Aws_credentials.source =
+  { Aws.Credentials.source =
       Static { access_key_id = "test"; secret_access_key = "test"; session_token = None };
     region = "us-east-1";
   }

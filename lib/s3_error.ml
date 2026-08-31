@@ -1,5 +1,5 @@
 type t =
-  | Aws of Aws_error.t
+  | Aws of Aws.Error.t
   | Not_found
   | Service_error of { code : string; message : string; status : int }
   | Unparseable_error_response of { status : int; body : string }
@@ -9,7 +9,7 @@ type t =
 (* Deliberately non-general: a substring search for "<Tag>text</Tag>" rather
    than a structural XML parse. Works because S3 error documents' Code/Message
    leaves carry no attributes or namespace prefix. Private to this module —
-   not aws-eio's Aws_credentials.extract_tag, which parses a different (STS)
+   not aws-eio's (private) Aws_credentials.extract_tag, which parses a different (STS)
    document and is not part of aws-eio's public contract. *)
 let extract_tag tag xml =
   let open_tag = "<" ^ tag ^ ">" and close_tag = "</" ^ tag ^ ">" in
@@ -35,7 +35,7 @@ let of_response ~status ~body =
     | _ -> Unparseable_error_response { status; body }
 
 let to_string = function
-  | Aws e -> Aws_error.to_string e
+  | Aws e -> Aws.Error.to_string e
   | Not_found -> "not found"
   | Service_error { code; message; status } -> Printf.sprintf "S3 error %d (%s): %s" status code message
   | Unparseable_error_response { status; body } ->

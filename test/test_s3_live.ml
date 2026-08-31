@@ -35,7 +35,7 @@ let config () =
   let region = region () in
   { S3_client.bucket = Option.value (Sys.getenv_opt "S3_EIO_LIVE_BUCKET") ~default:"";
     region;
-    credentials = Aws_credentials.of_env ~region ();
+    credentials = Aws.Credentials.of_env ~region ();
     endpoint = None }
 
 let live_key = "sun-live-test/s3-eio-smoke.txt"
