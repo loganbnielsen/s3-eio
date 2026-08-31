@@ -36,10 +36,17 @@ let valid_endpoint_host_char = function
   | '\000' .. ' ' | '\127' | '/' | '?' | '#' | '[' | ']' -> false
   | _ -> true
 
+let colon_count s =
+  String.fold_left (fun count c -> if c = ':' then count + 1 else count) 0 s
+
 let validate_endpoint endpoint =
   if endpoint.host = "" then Error (S3_error.Invalid_config "endpoint host is empty")
   else if not (String.for_all valid_endpoint_host_char endpoint.host) then
     Error (S3_error.Invalid_config ("endpoint has an invalid host: " ^ endpoint.host))
+  else if colon_count endpoint.host = 1 then
+    Error
+      (S3_error.Invalid_config
+         "endpoint host must not include a port; set endpoint.port instead")
   else
     match endpoint.port with
     | Some port when port <= 0 || port > 65535 ->
