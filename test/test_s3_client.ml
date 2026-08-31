@@ -24,6 +24,7 @@ let test_invalid_endpoints_return_invalid_config () =
       { scheme = `Http; host = "localhost"; port = Some 70000 };
       { scheme = `Http; host = "localhost"; port = Some 0 };
       { scheme = `Http; host = "local host"; port = None };
+      { scheme = `Http; host = "localhost:9000"; port = None };
       { scheme = `Http; host = "localhost/path"; port = None };
       { scheme = `Http; host = "localhost?x=1"; port = None };
       { scheme = `Http; host = "localhost#frag"; port = None };
