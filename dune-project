@@ -21,7 +21,7 @@ buffered in memory).")
  (depends
   (ocaml (>= 5.4.0))
   (eio (>= 1.3))
-  (aws-eio (>= 0.1.0))
+  (aws-eio (>= 0.1.1))
   (eio_main (and (>= 1.3) :with-test))
   (alcotest :with-test)
   (odoc :with-doc)))
