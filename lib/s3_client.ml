@@ -95,22 +95,12 @@ let resolve_credentials ~net ~clock ~fs config =
 (* Credentials are resolved fresh on every call, not cached — an extra
    round trip per S3 call for Web_identity/Container/Imdsv2. Deferred; see
    s3-eio.md's "Out of Scope". *)
-(* signed_request turns every non-2xx status into Error (Http_error _);
-   re-thread it back into the Ok shape interpret_* expects, or their
-   non-2xx branches are unreachable. Headers are lost here, matching
-   signed_request's own success-only header return. *)
-let reclassify_transport_result :
-    (int * (string * string) list * string, Aws.Error.t) result -> (int * (string * string) list * string, S3_error.t) result
-    = function
-  | Error (Aws.Error.Http_error (status, body)) -> Ok (status, [], body)
-  | Error e -> Error (S3_error.Aws e)
-  | Ok (status, headers, body) -> Ok (status, headers, body)
-
 let send_request ~net ~clock ~fs config ~meth ~key ?query ?body () =
   let* () = validate_config config in
   let* scheme, host, port, path = host_port_and_path config ~key in
   let* creds = resolve_credentials ~net ~clock ~fs config in
-  reclassify_transport_result
+  Result.map_error
+    (fun e -> S3_error.Aws e)
     (Aws.Http.signed_request ~net ~clock ~scheme
        ~access_key_id:creds.access_key_id
        ~secret_access_key:creds.secret_access_key
