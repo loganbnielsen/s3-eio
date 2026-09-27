@@ -85,7 +85,7 @@ let host_port_and_path config ~key =
   | None -> Ok (`Https, Printf.sprintf "%s.s3.%s.amazonaws.com" config.bucket config.region, None, "/" ^ key)
   | Some endpoint -> Ok (endpoint.scheme, endpoint.host, endpoint.port, "/" ^ config.bucket ^ "/" ^ key)
 
-let ( let* ) = Result.bind
+open Result.Syntax
 
 let resolve_credentials ~net ~clock ~fs config =
   match Aws.Credentials.resolve ~net ~clock ~fs config.credentials with
