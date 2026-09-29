@@ -101,12 +101,19 @@ let send_request ~net ~clock ~fs config ~meth ~key ?query ?body () =
   let* creds = resolve_credentials ~net ~clock ~fs config in
   Result.map_error
     (fun e -> S3_error.Aws e)
-    (Aws.Http.signed_request ~net ~clock ~scheme
-       ~access_key_id:creds.access_key_id
-       ~secret_access_key:creds.secret_access_key
-       ?session_token:creds.session_token
-       ~region:config.region ~service:"s3" ~normalize_path:false
-       ~meth ~host ?port ~path ?query ?body ())
+    (Aws.Http.signed_request ~net ~clock ~scheme ~credentials:creds
+       ~region:config.region ~service:"s3"
+       ~request:
+         { Aws.Http.meth
+         ; host
+         ; port
+         ; path
+         ; query = Option.value query ~default:[]
+         ; extra_headers = []
+         ; payload_hash = None
+         ; body
+         }
+         ())
 
 let find_header_case_insensitive name headers =
   List.find_map (fun (k, v) -> if String.lowercase_ascii k = name then Some v else None) headers
